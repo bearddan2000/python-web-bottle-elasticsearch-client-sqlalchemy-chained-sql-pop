@@ -1,0 +1,75 @@
+version: "3.4"
+
+services:
+
+  py-srv-pre:
+    build: py-srv/pre
+    healthcheck:
+      test: "exit 0"
+    command: sh -c "/wait && python app.py"
+    environment:
+      - INDEX_NAME=${INDEX_NAME}
+      - WAIT_HOSTS=elasticsearch:9200
+      - WAIT_HOSTS_TIMEOUT=300
+      - WAIT_SLEEP_INTERVAL=30
+      - WAIT_HOST_CONNECT_TIMEOUT=30
+    depends_on:
+      - elasticsearch
+      - kibana
+    links:
+      - "elasticsearch:elasticsearch"
+
+  py-srv-post:
+    build: py-srv/post
+    healthcheck:
+      test: "exit 0"
+    command: sh -c "/wait && python app.py"
+    environment:
+      - INDEX_NAME=${INDEX_NAME}
+      - WAIT_HOSTS=py-srv-pre:8000
+      - WAIT_HOSTS_TIMEOUT=300
+      - WAIT_SLEEP_INTERVAL=30
+      - WAIT_HOST_CONNECT_TIMEOUT=30
+    depends_on:
+      - py-srv-pre
+      - elasticsearch
+      - kibana
+    links:
+      - "elasticsearch:elasticsearch"
+
+  elasticsearch:
+    image: elasticsearch:${STACK_VERSION}
+    healthcheck:
+      test: "exit 0"
+      interval: 1m30s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
+    environment:
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    # volumes:
+    #  - ./es/data:/usr/share/elasticsearch/data
+    ports:
+      - 9200:9200
+
+  kibana:
+    image: kibana:${STACK_VERSION}
+    healthcheck:
+      test: "exit 0"
+      interval: 1m30s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
+    environment:
+      - "ELASTICSEARCH_URL=http://elasticsearch:9200"
+      - "SERVER_NAME=127.0.0.1"
+    ports:
+      - 5601:5601
+    depends_on:
+      - elasticsearch
